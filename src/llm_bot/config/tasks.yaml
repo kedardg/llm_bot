@@ -1,0 +1,248 @@
+command_processing_task:
+  description: >
+    STEP 1: Carefully analyze the user input "{user_command}" to identify ALL distinct commands.
+    STEP 2: Break down compound commands (commands connected by "and" or similar conjunctions) into individual instructions.
+    STEP 3: For each command, determine its intent from these categories:
+      - MOVE_FORWARD: Any command about moving ahead, forward, straight, etc.
+      - MOVE_BACKWARD: Any command about moving back, backwards, in reverse, etc.
+      - ROTATE_CLOCKWISE: Any command about turning right, rotating clockwise, etc.
+      - ROTATE_COUNTERCLOCKWISE: Any command about turning left, rotating counterclockwise, etc.
+      - VISION: Any command like "tell me what you see", "describe what's in front", etc.
+      - CHAT: Any general question or conversation that doesn't involve movement or rotation
+    STEP 4: For movement and rotation commands, identify the measurement value and unit (e.g., "5 feet", "90 degrees")
+    STEP 5: Organize all identified commands into a structured list, preserving the original wording, intent, and units
+    
+    CRITICAL: You MUST identify EVERY command in the input. Missing a command is a serious error.
+    The typical user input contains multiple commands (3-4 distinct instructions) that should be processed separately.
+
+  expected_output: >
+    A comprehensive list of ALL commands identified in the user input, with each command containing:
+    1. The original command text exactly as stated
+    2. The determined command type (MOVE_FORWARD, MOVE_BACKWARD, ROTATE_CLOCKWISE, ROTATE_COUNTERCLOCKWISE, VISION, CHAT)
+    3. The measurement value and unit (if applicable)
+    4. Any additional context needed for processing
+    
+    Example:
+    [
+      {
+        "original_text": "move forward 5 feet",
+        "command_type": "MOVE_FORWARD",
+        "value": 5,
+        "unit": "feet"
+      },
+      {
+        "original_text": "rotate clockwise 90 degrees",
+        "command_type": "ROTATE_CLOCKWISE",
+        "value": 90,
+        "unit": "degrees"
+      },
+      {
+        "original_text": "tell me what you see",
+        "command_type": "VISION"
+      }
+    ]
+  agent: command_processor_agent
+  validation:
+    required: true
+    schema_check: true
+    minimum_commands: 1
+    output_format: json
+  planning:
+    priority: highest
+    max_retries: 3
+
+unit_conversion_task:
+  description: >
+    STEP 1: Examine each command from the previous task, focusing on those with measurement values and units.
+    STEP 2: For distance measurements, convert ALL values to centimeters (cm) using these conversion factors:
+      - 1 foot = 30.48 cm
+      - 1 inch = 2.54 cm
+      - 1 meter = 100 cm
+      - 1 yard = 91.44 cm
+      - 1 millimeter = 0.1 cm
+    STEP 3: For angle measurements, convert ALL values to degrees using these conversion factors:
+      - 1 radian = 57.29578 degrees
+      - 1 mil = 0.05625 degrees
+      - 1 gradian = 0.9 degrees
+    STEP 4: Add the converted values to each command while preserving the original values and units
+    STEP 5: Ensure ALL movement and rotation commands have standardized measurements in cm or degrees
+    
+    CRITICAL: Every measurement MUST be converted to the standard unit (cm for distance, degrees for angles).
+    Accurate conversion is essential for proper robot operation.
+  
+  expected_output: >
+    The complete list of commands with standardized measurements added:
+    [
+      {
+        "original_text": "move forward 5 feet",
+        "command_type": "MOVE_FORWARD",
+        "value": 5,
+        "unit": "feet",
+        "converted_value": 152.4,
+        "converted_unit": "cm"
+      },
+      {
+        "original_text": "rotate clockwise 90 degrees",
+        "command_type": "ROTATE_CLOCKWISE",
+        "value": 90,
+        "unit": "degrees",
+        "converted_value": 90,
+        "converted_unit": "degrees"
+      },
+      {
+        "original_text": "tell me what you see",
+        "command_type": "VISION"
+      }
+    ]
+  agent: command_processor_agent
+  validation:
+    required: true
+    precision_check: true
+    units_standardization: true
+  dependencies:
+    - command_processing_task
+
+vision_task:
+  description: >
+    STEP 1: Review all commands from previous tasks and identify any VISION type commands
+    (e.g., "tell me what you see", "describe your surroundings", "what's in front of you")
+    STEP 2: For each vision command, use the vision tool to generate a detailed visual analysis
+    STEP 3: Ensure the vision description is clear and informative yet concise (1-2 sentences)
+    STEP 4: Preserve the complete raw output from the vision tool for later reference
+    
+    IMPORTANT: If multiple vision commands exist, process each one separately with its own analysis.
+    The vision output should be descriptive enough to give the user a clear understanding of what the robot sees,
+    but brief enough to be easily understood in a robot response.
+  
+  expected_output: >
+    For each vision command, provide:
+    1. The original vision command text
+    2. A concise 1-2 sentence description of what the robot sees
+    3. The complete raw output from the vision tool processing
+    
+    Example:
+    {
+      "command": "tell me what you see",
+      "vision_description": "I can see a young family sitting in the grass with their dog enjoying a sunny day.",
+      "raw_output": { ... complete vision tool JSON output ... }
+    }
+  agent: vision_agent
+  fallback:
+    enabled: true
+    default_response: "Vision analysis unavailable"
+  dependencies:
+    - unit_conversion_task
+
+chat_task:
+  description: >
+    STEP 1: Review all commands from previous tasks and identify any CHAT type commands
+    (general questions, statements, or conversation that doesn't involve movement, rotation, or vision)
+    STEP 2: For each chat command, use the chat tool to generate a natural, helpful response
+    STEP 3: Ensure responses are friendly, concise, and match the robot's helpful personality
+    STEP 4: Preserve the complete raw output from the chat tool for later reference
+    
+    IMPORTANT: If multiple chat commands exist, process each one separately with its own response.
+    Chat responses should be helpful and contain personality without being overly verbose.
+  
+  expected_output: >
+    For each chat command, provide:
+    1. The original chat command or question
+    2. A friendly, concise response (1-2 sentences)
+    3. The complete raw output from the chat tool processing
+    
+    Example:
+    {
+      "command": "what's the weather like today?",
+      "chat_response": "I don't have access to current weather data, but I'd be happy to move to a window so you can see outside!",
+      "raw_output": { ... complete chat tool JSON output ... }
+    }
+  agent: chat_agent
+  fallback:
+    enabled: true
+    default_response: "Chat processing unavailable"
+  dependencies:
+    - unit_conversion_task
+
+response_generation_task:
+  description: >
+    STEP 1: Gather ALL processed commands from previous tasks (command processing, unit conversion, vision, chat)
+    STEP 2: For EACH command identified in the user input, create a separate entry in the responses array
+    STEP 3: Populate each response object with the following fields according to the command type:
+      - For MOVE_FORWARD/BACKWARD:
+        * command: "MOVE_FORWARD" or "MOVE_BACKWARD"
+        * linear_distance: the converted value in cm
+        * rotate_degree: null
+        * description: Brief description of the movement
+        * raw_output: null (unless specialized tool was used)
+      
+      - For ROTATE_CLOCKWISE/COUNTERCLOCKWISE:
+        * command: "ROTATE_CLOCKWISE" or "ROTATE_COUNTERCLOCKWISE"
+        * linear_distance: null
+        * rotate_degree: the converted value in degrees
+        * description: Brief description of the rotation
+        * raw_output: null (unless specialized tool was used)
+      
+      - For VISION commands:
+        * command: null
+        * linear_distance: null
+        * rotate_degree: null
+        * description: The vision description
+        * raw_output: The complete vision tool output
+      
+      - For CHAT commands:
+        * command: null
+        * linear_distance: null
+        * rotate_degree: null
+        * description: The chat response
+        * raw_output: The complete chat tool output
+    
+    STEP 4: VERIFY that EVERY command from the original user input has a corresponding entry in the responses array
+    STEP 5: Validate that each response object follows the exact schema requirements
+    
+    CRITICAL: You MUST include ALL commands found in "{user_command}" - each should be represented by its own object
+    in the responses array. Triple-check your output against the original input to ensure no commands are missing.
+    The typical input has 3-4 distinct commands that ALL need to be represented in your final output.
+  
+  expected_output: >
+    A valid JSON object with a "responses" array containing one object for EACH command in the user input:
+    {
+      "responses": [
+        {
+          "command": "MOVE_FORWARD",
+          "linear_distance": 152.4,
+          "rotate_degree": null,
+          "description": "Moving forward 152.4 cm.",
+          "raw_output": null
+        },
+        {
+          "command": "ROTATE_CLOCKWISE",
+          "linear_distance": null,
+          "rotate_degree": 100.0,
+          "description": "Rotating clockwise 100 degrees.",
+          "raw_output": null
+        },
+        {
+          "command": null,
+          "linear_distance": null,
+          "rotate_degree": null,
+          "description": "I can see a young family sitting in the grass with their dog.",
+          "raw_output": {"vision": "A young family is sitting in the grass with their dog."}
+        },
+        {
+          "command": "MOVE_FORWARD",
+          "linear_distance": 15.0,
+          "rotate_degree": null,
+          "description": "Moving forward 15 cm.",
+          "raw_output": null
+        }
+      ]
+    }
+  agent: response_generator_agent
+  validation:
+    required: true
+    schema_check: true
+    completeness_check: true
+  dependencies:
+    - unit_conversion_task
+    - vision_task
+    - chat_task

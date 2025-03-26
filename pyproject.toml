@@ -1,0 +1,23 @@
+[project]
+name = "llm_bot"
+version = "0.1.0"
+description = "llm_bot using crewAI"
+authors = [{ name = "Your Name", email = "you@example.com" }]
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "crewai[tools]>=0.102.0,<1.0.0"
+]
+
+[project.scripts]
+llm_bot = "llm_bot.main:run"
+run_crew = "llm_bot.main:run"
+train = "llm_bot.main:train"
+replay = "llm_bot.main:replay"
+test = "llm_bot.main:test"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.crewai]
+type = "crew"
